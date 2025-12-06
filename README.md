@@ -1,162 +1,270 @@
-Particle41 DevOps Challenge – Submission by Deepak Yadav
 
-This repository contains my solution for the Particle41 DevOps Team Challenge.
+# **Particle41 DevOps Challenge – Submission by Deepak Yadav**
+
+This repository contains my completed solution for the Particle41 DevOps Team Challenge.
 
 It includes:
--A minimal web service (SimpleTimeService)
--A Docker image published to DockerHub
--AWS infrastructure using Terraform (server-based: ECS on EC2)
--A Jenkins pipeline (extra credit)
--A remote Terraform backend using S3 + DynamoDB (extra credit)
 
-Summary
+* A minimal web service (`SimpleTimeService`)
+* A Docker image published to DockerHub
+* AWS infrastructure using Terraform (server-based: ECS on EC2)
+* A Jenkins pipeline (extra credit)
+* A remote Terraform backend using S3 + DynamoDB (extra credit)
 
-This solution demonstrates:
--Building a tiny web API that returns JSON
--Containerizing it with Docker
--Running the container as a non-root user
--Deploying to AWS ECS (EC2 launch type) using Terraform
--Using an S3 + DynamoDB backend for Terraform state
--Automating image build and push with Jenkins
+---
 
-Task 1 – SimpleTimeService (Application + Docker)
+# **Table of Contents**
 
-About the Service
-SimpleTimeService is a small FastAPI app that returns:
+1. [Overview](#overview)
+2. [Task 1 – Application & Docker](#task-1--simpletimeservice-application--docker)
 
+   * Build & Run Locally
+   * Run from DockerHub
+3. [Task 2 – Terraform & AWS](#task-2--terraform--aws-server-based-ecs-on-ec2)
+
+   * Infrastructure Diagram (Text)
+   * Variables
+   * Deployment
+   * Destruction
+4. [Extra Credit – Remote Backend](#extra-credit--remote-terraform-backend-s3--dynamodb)
+5. [Extra Credit – Jenkins Pipeline](#extra-credit--jenkins-pipeline)
+6. [Repository Structure](#repository-structure)
+7. [Final Notes](#final-notes)
+
+---
+
+# **Overview**
+
+This challenge demonstrates:
+
+* Designing a minimal JSON API
+* Packaging it into a Docker container
+* Running the container as a **non-root** user
+* Deploying everything on AWS via **Terraform**
+* Using ECS (EC2 launch type) — **server-based option chosen**
+* Storing Terraform state in **S3 + DynamoDB**
+* Adding a Jenkins CI/CD pipeline for automation
+
+The project is structured so that **any reviewer can clone the repository and deploy the setup easily**.
+
+---
+
+# **Task 1 – SimpleTimeService (Application + Docker)**
+
+##  About the Service
+
+A minimal FastAPI app that returns the current timestamp and the client IP.
+
+Example output:
+
+```
 {
   "timestamp": "<current date and time>",
   "ip": "<client ip>"
 }
+```
 
-Build & Run Locally
+---
+
+##  Build & Run Locally
+
+```
 cd app
 docker build -t deepakyadavj6/simple-time-service:latest .
 docker run -p 8000:8000 deepakyadavj6/simple-time-service:latest
+```
 
 Open in browser:
 
+```
 http://localhost:8000
+```
 
-Run Directly From DockerHub
+---
+
+##  Run Directly From DockerHub
+
+```
 docker pull deepakyadavj6/simple-time-service:latest
 docker run -p 8000:8000 deepakyadavj6/simple-time-service:latest
+```
 
+---
 
-The container runs as a non-root user (appuser)
--Uses python:3.11-slim as base image
--Image size is around 57 MB
+##  Container Practices Followed
 
-Task 2 – Terraform + AWS (Server-Based: ECS on EC2):
+* Runs as a **non-root user** (`appuser`)
+* Uses `python:3.11-slim` (lightweight)
+* Final image size ~57 MB
 
-For Task 2, I chose the server-based option
-ECS on EC2 in a VPC (not serverless/Lambda)
+---
 
-Infrastructure Provisioned
-Terraform creates:
-A VPC with:
--2 public subnets
--2 private subnets
-An ECS Cluster (EC2 launch type)
-An Auto Scaling Group for ECS worker nodes (private subnets)
-An Application Load Balancer (public subnets)
-An ECS Service running my Docker image
-Supporting networking and IAM roles
+# **Task 2 – Terraform & AWS (Server-Based: ECS on EC2)**
 
-ECS tasks run in private subnets.
-Traffic comes in via the ALB in public subnets.
-Terraform Variables
+For this challenge, I selected:
 
-All configurable values are in:
+ **Server-based option → AWS ECS (EC2 Launch Type)**
+(not using serverless/Lambda)
+
+Terraform provisions the entire AWS environment.
+
+---
+
+##  Infrastructure Created (Text Diagram)
+
+```
+VPC
+├── Public Subnets (2)
+│     └── Application Load Balancer
+└── Private Subnets (2)
+      └── ECS Cluster (EC2 Launch Type)
+            └── ECS Service running Docker container
+```
+
+ECS tasks run in **private** subnets.
+ALB exposes the service to the Internet.
+
+---
+
+##  Terraform Variables
+
+All user-editable values live here:
+
+```
 terraform/terraform.tfvars
+```
+
 Example:
 
+```
 aws_region      = "ap-south-1"
 project_name    = "particle41-devops"
 container_image = "deepakyadavj6/simple-time-service:latest"
 desired_count   = 2
 instance_type   = "t3.small"
+```
 
-Deploying the Infrastructure
+---
 
-From the terraform directory:
+##  Deploy the Infrastructure
+
+```
 cd terraform
 terraform init
 terraform plan
 terraform apply
+```
 
+Terraform prints an ALB DNS name:
 
-When apply completes, Terraform prints an ALB DNS name, for example:
+```
+http://<alb-dns-name>.elb.amazonaws.com
+```
 
-alb_dns_name = http://<your-alb-dns>.elb.amazonaws.com
+Open it to view the running service.
 
-Open that URL in your browser to see the JSON response from the service.
+---
 
-Destroying the Infrastructure
-To remove all resources:
-cd terraform
+##  Destroy the Infrastructure
+
+```
 terraform destroy
+```
 
-This tears down:
-VPC and subnets
-ECS cluster and service
-EC2 instances
-ALB and related resources
-Security groups and IAM roles
-Extra Credit – Remote Terraform Backend (S3 + DynamoDB)
+This removes all resources:
 
-Terraform state is stored remotely using an S3 bucket with DynamoDB for locking.
+* VPC
+* Subnets
+* ECS cluster
+* ECS nodes (EC2 instances)
+* ALB
+* IAM roles / security groups
 
-Backend configuration:
+---
 
+# **Extra Credit – Remote Terraform Backend (S3 + DynamoDB)**
+
+Terraform state is stored remotely using:
+
+```
+S3 Bucket       → state storage
+DynamoDB Table  → state locking
+```
+
+Backend configuration (in `provider.tf`):
+
+```
 terraform {
   backend "s3" {
     bucket         = "particle41-devops-tfstate-deepakyadav"
     key            = "terraform/infra.tfstate"
-    region         = "us-east-1"
+    region         = "ap-south-1"
     dynamodb_table = "terraform-locks"
     encrypt        = true
   }
 }
+```
 
+This provides:
 
-This enables:
+* Centralized, durable state
+* Locking to prevent parallel applies
+* No local `.tfstate` file
 
-Remote state
-State locking
-No local .tfstate
+---
 
-Extra Credit – Jenkins Pipeline
+# **Extra Credit – Jenkins Pipeline**
 
-A Jenkinsfile is included in the repo.
+A `Jenkinsfile` is included.
 
-The pipeline:
+### The pipeline does:
 
-Checks out the repository
--Builds the Docker image from app/
--Pushes the image to DockerHub
--Runs Terraform commands (init, fmt, plan)
--Jenkins uses DockerHub credentials (dockerhub-creds).
--No credentials are stored in this repository.
+1. Checks out the repository
+2. Builds Docker image from `/app`
+3. Pushes image to DockerHub
+4. (Optional) Runs Terraform `init`, `fmt`, and `plan`
 
-Repository Structure:
+### Jenkins Credentials
+
+* Jenkins uses a secure **DockerHub credential** (`dockerhub-creds`)
+* No secrets are committed to this repository
+
+---
+
+# **Repository Structure**
+
+```
 app/
   Dockerfile
   main.py
   requirements.txt
+
 terraform/
   main.tf
   provider.tf
   variables.tf
   outputs.tf
   terraform.tfvars
+
 Jenkinsfile
 README.md
+```
 
-Final Notes:
--Application runs as non-root
--Docker image is small and based on a slim Python image
--ECS tasks are in private subnets
--ALB exposes the service externally
--No secrets or keys are committed
--Terraform can deploy and destroy the whole stack with 2 commands
+---
+
+**Final Notes**
+
+* App runs as **non-root** (security best practice)
+* Lightweight Docker image
+* ECS tasks run privately; ALB handles public traffic
+* No secrets or AWS keys stored in repo
+* Terraform backend stored remotely (S3 + DynamoDB)
+* Deployment and destruction require only:
+
+  * terraform apply
+  * terraform destroy
+
+This repository is prepared and ready for review.
+
+---
+
